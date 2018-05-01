@@ -1,0 +1,119 @@
+from __future__ import absolute_import, division, print_function
+
+import numpy as np
+import tensorflow as tf
+from datetime import datetime
+import os, csv, sys, glob, pickle
+import cv2 as cv
+
+def recognition_model (features, labels, mode):
+    # conv layer 1
+    conv1 = tf.layers.conv2d(inputs=features, filters=48, kernel_size=11, strides=4, activation=tf.nn.relu)
+    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=3, strides=2)
+    
+    # conv layer 2
+    conv2 = tf.layers.conv2d(inputs=pool1, filters=128, kernel_size=5, strides=1, activation=tf.nn.relu)
+    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=3, strides=2)
+    
+    # conv layer 3
+    conv3 = tf.layers.conv2d(inputs=pool2, filters=192, kernel_size=3, padding='SAME', strides=1, activation=tf.nn.relu)
+
+    # conv layer 4
+    conv4 = tf.layers.conv2d(inputs=conv3, filters=192, kernel_size=3, padding='SAME', strides=1, activation=tf.nn.relu)
+
+    # conv layer 5
+    conv5 = tf.layers.conv2d(inputs=conv4, filters=128, kernel_size=3, padding='SAME', strides=1, activation=tf.nn.relu)
+    pool5 = tf.layers.max_pooling2d(inputs=conv5, pool_size=3, strides=2)
+    
+    b, w, h, k = pool5.shape
+    
+    # dense layer 1
+    flattened = tf.reshape(pool5, [-1, w*h*k])
+    dense1 = tf.layers.dense(inputs=flattened, activation=tf.nn.relu, units=w*h*k)
+    # TODO dropout
+    
+    # dense layer 2
+    dense2 = tf.layers.dense(inputs=dense1, activation=tf.nn.relu, units=w*h*k)
+    # TODO dropout
+    
+    # dense layer 3
+    logits = tf.layers.dense(inputs=dense2, units=w*h*k)
+    
+    print(logits.shape)
+    # return logits
+    return logits
+
+def cal_accuracy ():
+    pass
+    
+def load_patch (label_dict, images, batch_size, step):
+    stack_images = None
+    labels = []
+
+    for im in range(batch_size):
+        image_path = images[im + batch_size * step]
+        image_name = image_path.split('/')[-1].split('.')[0]
+        
+        labels.append(label_dict[image_name])
+        
+        image = cv.imread(image_path)
+        
+        if stack_images is None:
+            stack_images = image[np.newaxis, :, :]
+        else:
+            stack_images = np.vstack((stack_images, image[np.newaxis, :, :]))
+
+    return stack_images, labels
+
+def train_loop (label_dict, image_paths, mode):
+    # TODO 
+    epoch_number = 1
+    batch_size = 5
+    num_classes = 10
+    
+    num_batches = int(np.floor(len(image_paths)/batch_size))
+    
+    f = tf.placeholder(tf.float32, [batch_size, 512, 512, 3])
+    l = tf.placeholder(tf.int32, [batch_size])
+    
+    model = recognition_model(f, l, mode)
+    
+    loss = tf.losses.sparse_softmax_cross_entropy(labels=l, logits=model)
+    optimizer = tf.train.MomentumOptimizer(learning_rate=0.01, momentum=0.9)
+    train_op = optimizer.minimize(
+            loss=loss,
+            global_step=tf.train.get_global_step())
+    
+    
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        
+        saver = tf.train.Saver()
+        try:
+            saver.restore(sess, "./checkpoint/model.ckpt")
+        except tf.errors.NotFoundError:
+            pass
+            
+        print("{} Start training...".format(datetime.now()))
+        
+        for epoch in range(epoch_number):
+            for step in range(num_batches):
+                images, labels = load_patch(label_dict, image_paths, batch_size, step)
+
+def main (argv):
+    if len(argv) != 3:
+        print('Syntax: %s <image_path> <mode/>' % sys.argv[0])
+        sys.exit(0)
+        
+    (image_path, mode) = argv[1:]
+        
+    image_paths = glob.glob(image_path + "*.jpg")
+
+    with open('../data/train.pkl', 'rb') as handle:
+        label_dict = pickle.load(handle)
+    
+    train_loop(label_dict, image_paths, mode)
+
+if __name__ == "__main__":
+    tf.app.run()
+    
