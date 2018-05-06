@@ -8,7 +8,7 @@
 # resume a partially completed download. All images will be saved in the JPG
 # format with 90% compression quality.
 
-import sys, os, multiprocessing, urllib2, csv
+import sys, os, multiprocessing, urllib3, csv
 from PIL import Image
 from StringIO import StringIO
 
@@ -30,7 +30,7 @@ def DownloadImage(key_url):
     return
 
   try:
-    response = urllib2.urlopen(url)
+    response = urllib3.urlopen(url)
     image_data = response.read()
   except:
     print('Warning: Could not download image %s from %s' % (key, url))
