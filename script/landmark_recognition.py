@@ -35,7 +35,7 @@ def recognition_model (features, num_classes):
     # conv layer 5
     conv5 = tf.layers.conv2d(inputs=conv4, filters=128, kernel_size=3, padding='SAME', strides=1, activation=tf.nn.relu)
     pool5 = tf.layers.max_pooling2d(inputs=conv5, pool_size=3, strides=2)
-    
+
     b, w, h, k = pool5.shape
     
     # dense layer 1
@@ -50,8 +50,6 @@ def recognition_model (features, num_classes):
     # dense layer 3
     logits = tf.layers.dense(inputs=dense2, units=num_classes)
     
-    print(logits.shape)
-    # return logits
     return logits
 
 def accuracy_cal(prediction, y):
@@ -86,7 +84,7 @@ def load_patch (images, batch_size, label_dict=None, step=0):
 
 def train_loop (label_dict, image_paths, mode):
     # TODO 
-    epoch_number = 100
+    epoch_number = 10
     batch_size = 128
     num_classes = 15000
     
