@@ -26,14 +26,18 @@ def DownloadImage(key_url):
   filename = os.path.join(out_dir, '%s.jpg' % key)
 
   if os.path.exists(filename):
-    print('Image %s already exists. Skipping download.' % filename)
+    #print('Image %s already exists. Skipping download.' % filename)
     return
 
   try:
     response = urllib2.urlopen(url)
     image_data = response.read()
   except:
-    print('Warning: Could not download image %s from %s' % (key, url))
+    with open("../data/not_download.csv", 'a+') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow([str(key), str(2949)])
+    #print('Warning: Could not download image %s from %s' % (key, url))
     return
 
   try:

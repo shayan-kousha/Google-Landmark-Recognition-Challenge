@@ -4,10 +4,11 @@ import numpy as np
 import tensorflow as tf
 from datetime import datetime
 import os, csv, sys, glob, pickle, time
-import cv2 as cv
+#import cv2 as cv
+from PIL import Image
 
-def write_results(ids, landmarks, step, csv_path="../data/submission.csv"):
-    with open(csv_path, 'ab') as csvfile:
+def write_results(ids, landmarks, conf, step, csv_path="../data/submission_axis=1.csv"):
+    with open(csv_path, 'a+') as csvfile:
         writer = csv.writer(csvfile, delimiter=',',
                                 quotechar='|', quoting=csv.QUOTE_MINIMAL)
         
@@ -15,7 +16,7 @@ def write_results(ids, landmarks, step, csv_path="../data/submission.csv"):
             writer.writerow(['id', 'landmarks'])
         
         for im in range(len(ids)):
-            writer.writerow([str(ids[im]), str(landmarks[im])])
+            writer.writerow([str(ids[im]), str(landmarks[im]) + " " + str(conf[im])])
     
 def recognition_model (features, num_classes):
     # conv layer 1
@@ -36,19 +37,12 @@ def recognition_model (features, num_classes):
     conv5 = tf.layers.conv2d(inputs=conv4, filters=128, kernel_size=3, padding='SAME', strides=1, activation=tf.nn.relu)
     pool5 = tf.layers.max_pooling2d(inputs=conv5, pool_size=3, strides=2)
 
-    b, w, h, k = pool5.shape
+    # conv layer 6
+    conv6 = tf.layers.conv2d(inputs=pool5, filters=150, kernel_size=4, strides= 1, activation=None)
     
-    # dense layer 1
-    flattened = tf.reshape(pool5, [-1, w*h*k])
-    dense1 = tf.layers.dense(inputs=flattened, activation=tf.nn.relu, units=w*h*k)
-    # TODO dropout
+    _, w, h, k = conv6.shape
     
-    # dense layer 2
-    dense2 = tf.layers.dense(inputs=dense1, activation=tf.nn.relu, units=w*h*k)
-    # TODO dropout
-    
-    # dense layer 3
-    logits = tf.layers.dense(inputs=dense2, units=num_classes)
+    logits = tf.reshape(conv6, [-1, w*h*k])
     
     return logits
 
@@ -73,12 +67,18 @@ def load_patch (images, batch_size, label_dict=None, step=0):
         if not(label_dict is None):
             labels.append(int(label_dict[image_name]))
         
-        image = cv.imread(image_path)
+        #image = cv.imread(image_path)
+        image = Image.open(image_path)
+        image = np.array(image)
         
         if stack_images is None:
-            stack_images = image[np.newaxis, :, :]
+            stack_images = image[np.newaxis, :, :, :]
         else:
-            stack_images = np.vstack((stack_images, image[np.newaxis, :, :]))
+            #print("image shpae = {}".format(image.shape))
+            w, h, _ = image.shape
+            if w != 512 or h != 512:
+                print (image_path)
+            stack_images = np.vstack((stack_images, image[np.newaxis, :, :, :]))
 
     return stack_images, labels, names
 
@@ -101,7 +101,9 @@ def train_loop (label_dict, image_paths, mode):
     
     loss = tf.losses.sparse_softmax_cross_entropy(labels=l, logits=model)
 
-    optimizer = tf.train.MomentumOptimizer(learning_rate=0.001, momentum=0.9)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.0000005)
+    #optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+    
     train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
     
     accuracy = accuracy_cal(pr, label)
@@ -110,13 +112,13 @@ def train_loop (label_dict, image_paths, mode):
         sess.run(tf.global_variables_initializer())
         
         saver = tf.train.Saver()
-        saver.restore(sess, "./checkpoints/model.ckpt")
+        saver.restore(sess, "./checkpoints/model_epoch_5.ckpt")
 
         if int(mode) == 0:
             print("{} Start training...".format(datetime.now()))
             start_time = time.time()
             
-            for epoch in range(epoch_number):
+            for epoch in range(6, epoch_number):
                 sum_loss = 0
                 count = 0
                 
@@ -145,9 +147,11 @@ def train_loop (label_dict, image_paths, mode):
                 images, _, names = load_patch(image_paths, batch_size, step=step)
                 logits = sess.run(model, feed_dict={f: images})
                 prediction = tf.argmax(logits, 1)
-                #print(names)
-                #print(prediction.eval())
-                write_results(ids=names, landmarks=prediction.eval(), step=step)
+                pred_conf = tf.reduce_max(tf.nn.softmax(logits, axis=1), 1)
+                write_results(ids=names, landmarks=prediction.eval(), conf=pred_conf.eval(), step=step)
+                
+                if step % 100 == 0:
+                    print("Step {}".format(step))
                 
 def main (argv):
     if len(argv) != 3:

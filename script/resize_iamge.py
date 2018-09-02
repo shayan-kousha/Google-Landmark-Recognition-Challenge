@@ -16,7 +16,9 @@ def resize(path, im_size):
         else :
             ratio = float(im_size)/m
 
-        if ratio == 1:
+        if ratio == 1 and float(m)/float(n)==1:
+            if count%10000 == 0:
+                print (count)
             count += 1
             continue
                 
@@ -39,7 +41,7 @@ def resize(path, im_size):
         count += 1
             
 if __name__ == "__main__":
-    output_path = "../data/train/*.jpg"
+    output_path = "../data/test/*.jpg"
     im_size = 512
     
     resize(output_path, im_size)
